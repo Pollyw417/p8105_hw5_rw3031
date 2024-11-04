@@ -99,7 +99,10 @@ t_test = function(mu){
   
   return(ttest_output)
 }
+```
 
+
+```{r}
 ttest_sim_df=
 expand_grid(
   mu=c(0:6),
@@ -126,4 +129,77 @@ ttest_sim_df|>
 From the plot, we found that the power increases when the true value of mu increases. Since our standard deviation is constant, the effect size increases as our mean increases. As effect size increases, the power of the t-test also increases. 
 
 # Problem 3
+
+```{r}
+homicide = 
+  read_csv("./homicide-data.csv")
+
+head(homicide)
+```
+The raw dataset have `r ncol(homicide)` variables and `r nrow(homicide)` observations. The variables in the dataset includes `r names(homicide)`.
+
+
+## total number of homicides across city
+
+```{r}
+homicide=
+homicide|>
+  mutate(state = ifelse(city == "Tulsa", "OK", state),
+         city_state = paste(city, state, sep=", "))
+ 
+total_homi=
+  homicide|>
+  group_by(city_state)|>
+  summarise(total_n_homicide = n())
+
+unsolved_homi=
+  homicide|>
+  group_by(city_state)|>
+  filter(disposition %in% c("Closed without arrest","Open/No arrest"))|>
+  summarise(unsolved_n_homicide = n())
+
+homi_count = 
+  total_homi|>
+  left_join(unsolved_homi)
+
+homi_count
+```
+
+## proportion estimate for Baltimore
+
+```{r}
+baltimore=
+homi_count |>
+  filter(city_state == "Baltimore, MD")
+
+prop.test(n=pull(baltimore,total_n_homicide), x=pull(baltimore,unsolved_n_homicide))|>
+  broom::tidy()|>
+  select(estimate, conf.low, conf.high)
+```
+
+For Baltimore, the estimated proportion of unsolved homicides is 0.6456 and the confidence intervals is 0.6276 and 0.6632.
+
+## proportion estimate for each city
+
+```{r}
+prop_test_cities =
+homi_count|>
+  mutate(test_result = purrr::map2(unsolved_n_homicide, total_n_homicide, ~ prop.test(x = .x, n = .y)))|>
+  mutate(test_result=purrr::map(test_result, broom::tidy))|>
+  unnest(test_result)|>
+  select(city_state,estimate,conf.low,conf.high)
+
+prop_test_cities
+```
+
+## plot for proportion estimate and confidence interval
+
+```{r}
+prop_test_cities|>
+  arrange(desc(estimate))|>
+  ggplot(aes(y=fct_reorder(city_state,estimate), x=estimate))+geom_bar(stat="identity", fill="lightgreen")+
+  geom_errorbar(aes(xmin=conf.low, xmax =conf.high))+
+  labs(x="City and State", y="Proportion Estimate of Unsolved Homicides")
+```
+
 
